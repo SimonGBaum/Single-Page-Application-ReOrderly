@@ -1,0 +1,48 @@
+# ==========================================
+# CLIENT SPECIFIC IGNORES
+# ==========================================
+
+# Logs
+client/logs
+client/*.log
+client/npm-debug.log*
+client/yarn-debug.log*
+client/yarn-error.log*
+client/pnpm-debug.log*
+client/lerna-debug.log*
+
+# Dependencies and Builds
+client/node_modules/
+client/dist/
+client/dist-ssr/
+client/*.local
+
+# Local environment variables
+client/.env
+
+
+# ==========================================
+# SUPABASE SPECIFIC IGNORES
+# ==========================================
+
+supabase/node_modules/
+
+
+# ==========================================
+# GLOBAL IGNORES (Applies to the whole project)
+# ==========================================
+
+# Logs
+logs
+*.log
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

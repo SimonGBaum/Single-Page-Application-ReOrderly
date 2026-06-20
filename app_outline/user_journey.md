@@ -1,0 +1,97 @@
+### What Does the User Journey Look Like?
+A user first visits?
+- They are prompted to sign-up
+    - Requires an email
+    - First and last name
+    - Username
+    - Password
+    - Confirm password
+- Once signed-up, prompted to sign in
+    - Introduced to Home Page
+        - They see the logo at the top
+        - Their name and a link to their profile in the top left corner
+        - Time and date in top right corner
+        - Contact us page link in the bottom left
+        - Under the logo will be a list of options across the screen
+            - Create an order
+            - Their orders
+            - Update an order
+            - Track orders
+        - The body of the page will talk about how cool our app is and what it will do for the user
+        - It will also have a humorous couplet about people forgetting their orders and ReOrderly saving the day!
+    - They can then select the Create tab
+        - This will provide them the options to create an order
+            - Product type
+            - Product name
+            - Product quantity
+            - Store name
+            - Sore address
+            - Item description
+            - Order type
+            - Number of deliveries
+        - It will have tabs for the:
+            - Home page
+            - Orders
+            - Update
+            - Track
+        - Once they create the order they will be asked to:
+            - Submit the order (create it)
+            - Create another order
+        - They will then be able to navigate to the Home Page
+    - On the home page they can then select the orders tab
+        - They can select:
+            - One or more orders to look at
+            - When they select an order, it will display order information 
+        - They can then select:
+            - Delete order
+            - Update order (which takes them to the update page)
+            - Track order (which takes them to the track page)
+        - They will then be able to navigate to the Home Page
+    - On the home page they can then select the update tab
+        - They can then select and update:
+            - Product type
+            - Product name
+            - Product quantity
+            - Store name
+            - Sore address
+            - Item description
+            - Order type
+            - Number of deliveries
+        - They will then be able to navigate to the Home Page
+    - On the home page they can then select the track page
+        	They can:
+            - Track an order by:
+                - Order name
+                - Order number
+                - Product name
+                - Date Created
+                - Expected delivery date
+                - Last delivery date
+                - Number of deliveries per order #
+                - Lifetime number of deliveries
+        - They can then select sort
+            - They can sort by:
+                - Order name
+                - Order number
+                - Date created
+                - Expected delivery date
+                - Last delivery date
+                - Number of deliveries per order number
+                - Lifetime number of orders
+        - They will then be able to navigate to the Home Page
+    - On the home page they can select the about us page
+        - They can see:
+            - Email
+            - Phone number
+            - Github
+            - Linkedin
+        - They will then be able to navigate to the Home Page
+- When they are finished
+    - They will then be able to navigate to the Home Page
+    - Then press the logout button
+- If there is an error:
+        - They will be directed to the error page automatically
+            - It will inform them that everything is fine
+            - It's being tracked
+            - It will be taken care of shortly
+            - Give button for home page
