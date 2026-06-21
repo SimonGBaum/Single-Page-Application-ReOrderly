@@ -4,7 +4,7 @@ import { IconSearch } from '@tabler/icons-react'
 import PageWrapper from '../../components/PageWrapper/PageWrapper'
 import { useAuth }   from '../../context/AuthContext'
 import { useOrders } from '../../context/OrdersContext'
-import { updateOrder } from '../../data/orderStore'
+import * as orderService from '../../services/orderService'
 import { formatDate }  from '../../utils/formatDate'
 import './UpdateOrder.css'
 
@@ -23,9 +23,11 @@ export default function UpdateOrder() {
   useAuth()
   const { orders, dispatch } = useOrders()
 
-  const [search,     setSearch]     = useState('')
-  const [errors,     setErrors]     = useState({})
-  const [flash,      setFlash]      = useState(false)
+  const [search,   setSearch]   = useState('')
+  const [errors,   setErrors]   = useState({})
+  const [flash,    setFlash]    = useState(false)
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState('')
 
   function buildForm(order) {
     return {
@@ -40,7 +42,7 @@ export default function UpdateOrder() {
       deliveryFrequency:   order.deliveryFrequency   || 'weekly',
       customFrequencyDays: order.customFrequencyDays || 7,
       numberOfDeliveries:  order.numberOfDeliveries  || 1,
-      untilCancelled:      order.numberOfDeliveries === 'until-cancelled',
+      untilCancelled:      order.untilCancelled      || false,
       status:              order.status              || 'active',
       expectedDeliveryDate: order.expectedDeliveryDate ? order.expectedDeliveryDate.split('T')[0] : '',
     }
@@ -65,16 +67,23 @@ export default function UpdateOrder() {
     }
   }
 
-  function handleMarkDelivery() {
+  async function handleMarkDelivery() {
     if (!selected) return
     const updates = {
       deliveriesCompleted: (selected.deliveriesCompleted || 0) + 1,
       lastDeliveryDate: new Date().toISOString(),
     }
-    updateOrder(selected.orderId, updates)
-    dispatch({ type: 'UPDATE_ORDER', payload: { orderId: selected.orderId, updates } })
-    setSelected(prev => ({ ...prev, ...updates }))
-    setForm(prev => prev ? { ...prev } : prev)
+    setLoading(true)
+    setError('')
+    try {
+      await orderService.updateOrder(selected.orderId, updates)
+      dispatch({ type: 'UPDATE_ORDER', payload: { orderId: selected.orderId, updates } })
+      setSelected(prev => ({ ...prev, ...updates }))
+    } catch {
+      setError('Failed to record delivery. Try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   function validate() {
@@ -85,7 +94,7 @@ export default function UpdateOrder() {
     return errs
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
@@ -96,10 +105,19 @@ export default function UpdateOrder() {
       expectedDeliveryDate: form.expectedDeliveryDate ? new Date(form.expectedDeliveryDate).toISOString() : null,
     }
     delete updates.untilCancelled
-    updateOrder(selected.orderId, updates)
-    dispatch({ type: 'UPDATE_ORDER', payload: { orderId: selected.orderId, updates } })
-    setFlash(true)
-    setTimeout(() => { setFlash(false); navigate('/') }, 1200)
+
+    setLoading(true)
+    setError('')
+    try {
+      await orderService.updateOrder(selected.orderId, updates)
+      dispatch({ type: 'UPDATE_ORDER', payload: { orderId: selected.orderId, updates } })
+      setFlash(true)
+      setTimeout(() => { setFlash(false); navigate('/') }, 1200)
+    } catch {
+      setError('Failed to save changes. Try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Picker view
@@ -155,6 +173,7 @@ export default function UpdateOrder() {
         <h1 className="update-title">Update: {selected.orderNickname}</h1>
 
         {flash && <div className="update-flash" role="status">Changes applied!</div>}
+        {error && <p className="form-error-global" role="alert">{error}</p>}
 
         <form className={`update-form card ${flash ? 'update-form--flash' : ''}`} onSubmit={handleSubmit} noValidate>
 
@@ -164,7 +183,7 @@ export default function UpdateOrder() {
               <p className="update-delivery-label">Deliveries completed (this order)</p>
               <p className="update-delivery-count data-text">{selected.deliveriesCompleted || 0} delivered · last on {formatDate(selected.lastDeliveryDate)}</p>
             </div>
-            <button type="button" className="btn-primary btn-sm" onClick={handleMarkDelivery}>
+            <button type="button" className="btn-primary btn-sm" onClick={handleMarkDelivery} disabled={loading}>
               Mark Delivery Complete
             </button>
           </div>
@@ -250,7 +269,9 @@ export default function UpdateOrder() {
           )}
 
           <div className="update-actions">
-            <button type="submit" className="btn-primary">Apply Changes</button>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Saving…' : 'Apply Changes'}
+            </button>
             <button type="button" className="btn-secondary" onClick={() => navigate('/')}>Back to Home</button>
           </div>
         </form>

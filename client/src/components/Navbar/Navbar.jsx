@@ -5,13 +5,13 @@ import { useOrders } from '../../context/OrdersContext'
 import './Navbar.css'
 
 export default function Navbar() {
-  const { user, dispatch } = useAuth()
+  const { user, logout } = useAuth()
   const { dispatch: ordersDispatch } = useOrders()
   const navigate = useNavigate()
 
-  function handleLogout() {
-    dispatch({ type: 'LOGOUT' })
+  async function handleLogout() {
     ordersDispatch({ type: 'SET_ORDERS', payload: [] })
+    await logout()
     navigate('/login')
   }
 

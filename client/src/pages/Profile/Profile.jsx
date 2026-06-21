@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { IconUser } from '@tabler/icons-react'
 import PageWrapper from '../../components/PageWrapper/PageWrapper'
 import { useAuth }   from '../../context/AuthContext'
-import { updateUser } from '../../data/userStore'
-import { hashPassword } from '../../utils/hashPassword'
+import * as userService from '../../services/userService'
+import * as authService from '../../services/authService'
 import './Profile.css'
 
 export default function Profile() {
@@ -17,11 +17,13 @@ export default function Profile() {
     mailingAddress: user?.mailingAddress || '',
     billingAddress: user?.billingAddress || '',
   })
-  const [pwForm, setPwForm]   = useState({ current: '', next: '', confirm: '' })
+  const [pwForm, setPwForm]     = useState({ current: '', next: '', confirm: '' })
   const [pwErrors, setPwErrors] = useState({})
   const [pwSuccess, setPwSuccess] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const [errors, setErrors]   = useState({})
+  const [errors, setErrors]     = useState({})
+  const [saving, setSaving]     = useState(false)
+  const [pwSaving, setPwSaving] = useState(false)
 
   function set(key) {
     return (e) => {
@@ -30,7 +32,7 @@ export default function Profile() {
     }
   }
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.preventDefault()
     const errs = {}
     if (!form.firstName.trim()) errs.firstName = 'First name is required.'
@@ -38,35 +40,53 @@ export default function Profile() {
     if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Enter a valid email.'
     if (Object.keys(errs).length) { setErrors(errs); return }
 
-    const updated = updateUser(user.userId, {
-      firstName:      form.firstName.trim(),
-      lastName:       form.lastName.trim(),
-      email:          form.email.trim().toLowerCase(),
-      mailingAddress: form.mailingAddress.trim() || null,
-      billingAddress: form.billingAddress.trim() || null,
-    })
-    dispatch({ type: 'UPDATE_USER', payload: updated })
-    setSaveSuccess(true)
-    setEditing(false)
-    setTimeout(() => setSaveSuccess(false), 3000)
+    setSaving(true)
+    try {
+      const updated = await userService.updateProfile(user.userId, {
+        firstName:      form.firstName.trim(),
+        lastName:       form.lastName.trim(),
+        mailingAddress: form.mailingAddress.trim() || null,
+        billingAddress: form.billingAddress.trim() || null,
+      })
+
+      // Update email via auth if it changed
+      if (form.email.trim().toLowerCase() !== user.email) {
+        await authService.updateEmail(form.email.trim().toLowerCase())
+      }
+
+      dispatch({ type: 'UPDATE_USER', payload: { ...updated, email: form.email.trim().toLowerCase() } })
+      setSaveSuccess(true)
+      setEditing(false)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch {
+      setErrors({ form: 'Failed to save changes. Try again.' })
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handlePasswordChange(e) {
     e.preventDefault()
     const errs = {}
-    const currentHash = await hashPassword(pwForm.current)
-    if (currentHash !== user.passwordHash) errs.current = 'Current password is wrong.'
     if (pwForm.next.length < 8) errs.next = 'New password must be at least 8 characters.'
     if (pwForm.next !== pwForm.confirm) errs.confirm = 'Passwords don\'t match.'
+    if (!pwForm.current) errs.current = 'Enter your current password.'
     if (Object.keys(errs).length) { setPwErrors(errs); return }
 
-    const newHash = await hashPassword(pwForm.next)
-    updateUser(user.userId, { passwordHash: newHash })
-    dispatch({ type: 'UPDATE_USER', payload: { passwordHash: newHash } })
-    setPwForm({ current: '', next: '', confirm: '' })
-    setPwErrors({})
-    setPwSuccess(true)
-    setTimeout(() => setPwSuccess(false), 3000)
+    setPwSaving(true)
+    try {
+      // Verify current password by re-signing in
+      await authService.signIn({ email: user.email, password: pwForm.current })
+      await authService.updatePassword(pwForm.next)
+      setPwForm({ current: '', next: '', confirm: '' })
+      setPwErrors({})
+      setPwSuccess(true)
+      setTimeout(() => setPwSuccess(false), 3000)
+    } catch {
+      setPwErrors({ current: 'Current password is wrong.' })
+    } finally {
+      setPwSaving(false)
+    }
   }
 
   const addressNudge = !user?.mailingAddress || !user?.billingAddress
@@ -104,6 +124,7 @@ export default function Profile() {
 
           {editing ? (
             <form className="profile-form" onSubmit={handleSave} noValidate>
+              {errors.form && <p className="form-error-global" role="alert">{errors.form}</p>}
               <div className="profile-grid">
                 <div className="form-group">
                   <label htmlFor="firstName">First Name</label>
@@ -136,7 +157,9 @@ export default function Profile() {
                 <input id="billingAddress" type="text" value={form.billingAddress} onChange={set('billingAddress')} />
               </div>
               <div className="profile-form__actions">
-                <button type="submit" className="btn-primary btn-sm">Save Changes</button>
+                <button type="submit" className="btn-primary btn-sm" disabled={saving}>
+                  {saving ? 'Saving…' : 'Save Changes'}
+                </button>
                 <button type="button" className="btn-secondary btn-sm" onClick={() => setEditing(false)}>Cancel</button>
               </div>
             </form>
@@ -179,7 +202,9 @@ export default function Profile() {
                 aria-describedby={pwErrors.confirm ? 'err-con' : undefined} />
               {pwErrors.confirm && <span className="field-error" id="err-con" role="alert">{pwErrors.confirm}</span>}
             </div>
-            <button type="submit" className="btn-secondary btn-sm">Update Password</button>
+            <button type="submit" className="btn-secondary btn-sm" disabled={pwSaving}>
+              {pwSaving ? 'Updating…' : 'Update Password'}
+            </button>
           </form>
         </div>
       </div>

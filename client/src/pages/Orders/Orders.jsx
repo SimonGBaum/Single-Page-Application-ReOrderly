@@ -7,8 +7,8 @@ import {
 import PageWrapper from '../../components/PageWrapper/PageWrapper'
 import { useOrders } from '../../context/OrdersContext'
 import { useAuth }   from '../../context/AuthContext'
-import { deleteOrder } from '../../data/orderStore'
-import { getDraft, clearDraft } from '../../data/orderStore'
+import * as orderService from '../../services/orderService'
+import { getDraft, clearDraft } from '../../services/draftService'
 import { formatDate } from '../../utils/formatDate'
 import './Orders.css'
 
@@ -46,6 +46,7 @@ export default function Orders() {
   const [sortField,  setSortField]  = useState('dateCreated')
   const [expandedId, setExpandedId] = useState(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
 
   function setTab(tab) { dispatch({ type: 'SET_TAB', payload: tab }) }
 
@@ -59,19 +60,23 @@ export default function Orders() {
   const visible = sortOrders(filtered(), sortField)
   const draft   = getDraft(user?.userId)
 
-  function handleDelete(orderId) {
-    deleteOrder(orderId)
-    dispatch({ type: 'DELETE_ORDER', payload: orderId })
-    setExpandedId(null)
-    setConfirmDeleteId(null)
+  async function handleDelete(orderId) {
+    setDeletingId(orderId)
+    try {
+      await orderService.deleteOrder(orderId)
+      dispatch({ type: 'DELETE_ORDER', payload: orderId })
+      setExpandedId(null)
+      setConfirmDeleteId(null)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
-  function handleDiscardDraft() {
+  async function handleDiscardDraft() {
     clearDraft(user.userId)
-    // Remove from orders list if it was persisted
     const draftInList = orders.find(o => o.status === 'draft')
     if (draftInList) {
-      deleteOrder(draftInList.orderId)
+      await orderService.deleteOrder(draftInList.orderId)
       dispatch({ type: 'DELETE_ORDER', payload: draftInList.orderId })
     }
   }
@@ -187,7 +192,11 @@ export default function Orders() {
                       {confirmDeleteId === order.orderId ? (
                         <div className="orders-confirm-delete">
                           <span>Sure you want to scrap this order?</span>
-                          <button className="btn-danger btn-sm" onClick={() => handleDelete(order.orderId)}>Yes, scrap it</button>
+                          <button className="btn-danger btn-sm"
+                            disabled={deletingId === order.orderId}
+                            onClick={() => handleDelete(order.orderId)}>
+                            {deletingId === order.orderId ? 'Scrapping…' : 'Yes, scrap it'}
+                          </button>
                           <button className="btn-secondary btn-sm" onClick={() => setConfirmDeleteId(null)}>Cancel</button>
                         </div>
                       ) : (

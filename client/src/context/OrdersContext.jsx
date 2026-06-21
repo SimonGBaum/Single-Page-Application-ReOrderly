@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect } from 'react'
-import { getOrdersByUser } from '../data/orderStore'
+import * as orderService from '../services/orderService'
 import { useAuth } from './AuthContext'
 
 const OrdersContext = createContext(null)
@@ -35,8 +35,7 @@ export function OrdersProvider({ children }) {
 
   useEffect(() => {
     if (user) {
-      const orders = getOrdersByUser(user.userId)
-      dispatch({ type: 'SET_ORDERS', payload: orders })
+      orderService.getOrders().then(orders => dispatch({ type: 'SET_ORDERS', payload: orders }))
     } else {
       dispatch({ type: 'SET_ORDERS', payload: [] })
     }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-All commands run from the `client/` directory:
+Client (run from `client/`):
 
 ```bash
 npm run dev        # start Vite dev server with HMR
@@ -15,6 +15,18 @@ npm run lint       # run ESLint
 
 No test runner is configured yet.
 
+Supabase CLI (run from `supabase/` using `npx supabase` or `./node_modules/.bin/supabase`):
+
+```bash
+npx supabase db push               # apply local migrations to remote
+npx supabase db pull               # pull remote schema changes
+npx supabase db diff               # generate a migration from schema diff
+npx supabase db reset              # reset local DB to migration state
+npx supabase gen types typescript  # regenerate TypeScript types from schema
+```
+
+See `supabase/CLAUDE.md` for full CLI guidance. Remote project ref: `zdvdqialhtghbbjvqdol`.
+
 ## Architecture
 
 Monorepo with a single `client/` package and a `supabase/` reference directory.
@@ -23,28 +35,39 @@ Monorepo with a single `client/` package and a `supabase/` reference directory.
 client/
   src/
     context/     # AuthContext + OrdersContext (React Context + useReducer)
-    data/        # localStorage data layer (userStore.js, orderStore.js)
+    data/        # Legacy localStorage layer (userStore.js, orderStore.js) — superseded by services/
+    services/    # Active Supabase integration: api.js, authService.js, orderService.js, userService.js
     pages/       # One folder per route, each with JSX + CSS
     components/  # Shared UI (Navbar, PageWrapper, ProtectedRoute, VoltronTransition, OfflineBanner)
     styles/      # tokens.css (CSS custom props) + animations.css
-    utils/       # hashPassword, generateId, formatDate, debounce
+    utils/       # hashPassword, generateId, formatDate (+ addDays, frequencyToDays), debounce
   skeleton/      # Design docs: app_outline.md, style.guide.md, user_journey.md, wireframe PNGs
 supabase/
-  reference/     # testing_schema.sql (DB schema — not yet wired to the app)
+  supabase/
+    migrations/  # Four migrations: updated_at trigger, users, orders, delivery_schedules tables
 ```
 
-**Current data persistence: localStorage only.** Despite Supabase credentials existing in `client/.env`, the app does not call Supabase yet. All reads/writes go through `src/data/userStore.js` and `src/data/orderStore.js`. The Supabase schema lives in `supabase/reference/testing_schema.sql` as a reference for a future migration.
+**Bootstrap / provider hierarchy** (`main.jsx`):
+```
+ErrorBoundary → BrowserRouter → AuthProvider → OrdersProvider → App
+```
+`ErrorBoundary` catches render crashes and redirects to `/error`.
+
+**Data persistence: Supabase (migration complete for contexts and pages).** The `src/data/` localStorage stores are superseded — `AuthContext` and `OrdersContext` now call the `services/` layer directly. The `data/` files remain on disk but are no longer on the active code path.
+
+**Services layer** (`src/services/`):
+- `api.js` — exports two Axios instances: `api` (PostgREST at `/rest/v1`, attaches Bearer token from `reorderly_session`) and `authApi` (GoTrue at `/auth/v1`). The `api` interceptor auto-redirects to `/login` on 401.
+- `authService.js` — `signUp`, `signIn`, `signOut`, `getAuthUser`, `updatePassword`, `updateEmail`, `getEmailByUsername` (calls Supabase RPC `get_email_by_username` — login is by username, not email)
+- `orderService.js` — `getOrders`, `getOrderById`, `createOrder`, `updateOrder`, `deleteOrder`. Uses `normalizeOrder()` to flatten the joined `delivery_schedules` row into the app's camelCase order shape. `createOrder` writes to `orders` then optionally `delivery_schedules` for recurring types.
+- `userService.js` — `createProfile`, `getProfile`, `updateProfile`. Maps snake_case `users` table columns to camelCase profile shape.
 
 **Routing:** Wired in `src/App.jsx`. Public routes: `/login`, `/signup`, `/contact`, `/error`. All other routes are wrapped in `<ProtectedRoute>` which redirects to `/login` if no session exists.
 
-**Auth flow:** `AuthContext` stores the logged-in user in React state and mirrors session to `localStorage` (`reorderly_session` key). `OrdersContext` watches `AuthContext` and resets on logout.
+**Auth flow:** On app load, `AuthContext` reads the `reorderly_session` key from localStorage, validates the token with Supabase (`getAuthUser`), fetches the profile (`getProfile`), then dispatches `LOGIN`. On login, pages call `authService.signIn` + `userService.getProfile` manually before dispatching. Session is stored as `{ accessToken, refreshToken, expiresAt }` in localStorage.
 
-**Data layer API surface:**
+**Order shape (camelCase, used throughout the app) vs DB (snake_case):** `orderService.normalizeOrder` is the canonical mapping. Key split: `orders` table holds product/store fields; `delivery_schedules` (joined as `delivery_schedules(*)`) holds frequency/count fields. This join is always fetched with `ORDER_SELECT = '*,delivery_schedules(*)'`.
 
-- `userStore.js` — `createUser`, `getUserByUsername`, `getUserByEmail`, `getUserById`, `updateUser`, `saveSession`, `getSession`, `clearSession`
-- `orderStore.js` — `createOrder`, `getOrdersByUser`, `getOrderById`, `updateOrder`, `deleteOrder`, `saveDraft`, `getDraft`, `clearDraft`
-
-Passwords are SHA-256 hashed client-side (Web Crypto API) before storage — see `src/utils/hashPassword.js`.
+Passwords are SHA-256 hashed client-side (Web Crypto API) before passing to Supabase — see `src/utils/hashPassword.js`.
 
 ## Application: Reorderly
 
@@ -52,7 +75,7 @@ A recurring-order tracker. Users create, update, and track orders (medications, 
 
 **Pages:** Login, Sign-Up, Home, Orders, Create Order, Update Order, Track Order, Profile, Contact Us, Error.
 
-**Order shape (key fields):** `id`, `userId`, `status` (draft/active/paused/completed/cancelled), `orderType` (one-time/recurring), `orderNickname`, `productName`, `productType`, `quantity`, `storeName`, `storeAddress`, `itemDescription`, `deliveryFrequency` (weekly/biweekly/monthly/custom), `customFrequencyDays`, `numberOfDeliveries`, `untilCancelled`, `deliveriesCompleted`, `lastDeliveryDate`, `expectedDeliveryDate`, `dateCreated`.
+**Order shape (key fields):** `orderId`, `userId`, `status` (draft/active/paused/completed/cancelled), `orderType` (one-time/recurring), `orderNickname`, `productName`, `productType`, `productQuantity`, `storeName`, `storeAddress`, `itemDescription`, `deliveryFrequency` (weekly/biweekly/monthly/custom), `customFrequencyDays`, `numberOfDeliveries`, `untilCancelled`, `deliveriesCompleted`, `lastDeliveryDate`, `expectedDeliveryDate`, `dateCreated`, `dateOrdered`.
 
 ## Design System — Voltron Theme
 

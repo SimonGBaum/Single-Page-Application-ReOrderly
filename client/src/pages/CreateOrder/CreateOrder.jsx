@@ -4,7 +4,8 @@ import { IconCheck } from '@tabler/icons-react'
 import PageWrapper from '../../components/PageWrapper/PageWrapper'
 import { useAuth } from '../../context/AuthContext'
 import { useOrders } from '../../context/OrdersContext'
-import { createOrder, getDraft, saveDraft, clearDraft } from '../../data/orderStore'
+import * as orderService from '../../services/orderService'
+import { getDraft, saveDraft, clearDraft } from '../../services/draftService'
 import './CreateOrder.css'
 
 const BLANK_FORM = {
@@ -34,6 +35,8 @@ export default function CreateOrder() {
   const [errors, setErrors]   = useState({})
   const [saved, setSaved]     = useState(false)
   const [done, setDone]       = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
   const savedTimer  = useRef(null)
   const debounceRef = useRef(null)
 
@@ -78,26 +81,35 @@ export default function CreateOrder() {
     return errs
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
 
-    const order = createOrder({
-      ...form,
-      userId: user.userId,
-      status: 'active',
-      numberOfDeliveries: form.untilCancelled ? 'until-cancelled' : form.numberOfDeliveries,
-    })
-    clearDraft(user.userId)
-    ordersDispatch({ type: 'ADD_ORDER', payload: order })
-    setDone(true)
+    setLoading(true)
+    setError('')
+    try {
+      const order = await orderService.createOrder({
+        ...form,
+        userId: user.userId,
+        status: 'active',
+        numberOfDeliveries: form.untilCancelled ? 'until-cancelled' : form.numberOfDeliveries,
+      })
+      clearDraft(user.userId)
+      ordersDispatch({ type: 'ADD_ORDER', payload: order })
+      setDone(true)
+    } catch {
+      setError('Failed to create order. Try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   function handleAnother() {
     setForm({ ...BLANK_FORM })
     setErrors({})
     setDone(false)
+    setError('')
   }
 
   if (done) {
@@ -129,6 +141,7 @@ export default function CreateOrder() {
         </div>
 
         <form className="create-form card" onSubmit={handleSubmit} noValidate>
+          {error && <p className="form-error-global" role="alert">{error}</p>}
 
           <div className="form-group">
             <label htmlFor="orderNickname">Order Nickname <span className="optional">(optional)</span></label>
@@ -235,7 +248,9 @@ export default function CreateOrder() {
           )}
 
           <div className="create-actions">
-            <button type="submit" className="btn-primary">Launch Order</button>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Launching…' : 'Launch Order'}
+            </button>
             <button type="button" className="btn-secondary" onClick={() => navigate('/')}>Back to Home</button>
           </div>
         </form>

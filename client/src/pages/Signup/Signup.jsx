@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import PageWrapper from '../../components/PageWrapper/PageWrapper'
-import { createUser } from '../../data/userStore'
-import { hashPassword } from '../../utils/hashPassword'
+import * as authService from '../../services/authService'
+import * as userService from '../../services/userService'
 import './Signup.css'
 
 const EMPTY = { firstName: '', lastName: '', email: '', username: '', password: '', confirmPassword: '' }
@@ -39,20 +39,31 @@ export default function Signup() {
 
     setLoading(true)
     try {
-      const ph = await hashPassword(fields.password)
-      await createUser({
+      const authResult = await authService.signUp({
+        email:    fields.email.trim().toLowerCase(),
+        password: fields.password,
+      })
+
+      await userService.createProfile({
+        id:        authResult.user.id,
+        username:  fields.username.trim(),
         firstName: fields.firstName.trim(),
         lastName:  fields.lastName.trim(),
-        email:     fields.email.trim().toLowerCase(),
-        username:  fields.username.trim(),
-        passwordHash: ph,
       })
+
       setSuccess(true)
       setTimeout(() => navigate('/login', { state: { prefill: fields.username.trim() } }), 1500)
     } catch (err) {
-      if (err.message.includes('Username')) setErrors({ username: err.message })
-      else if (err.message.includes('Email')) setErrors({ email: err.message })
-      else setErrors({ form: 'Something went wrong. Try again.' })
+      const body = err.response?.data || {}
+      const msg  = body.msg || body.error_description || body.message || ''
+
+      if (body.error_code === 'user_already_exists' || msg.toLowerCase().includes('already registered')) {
+        setErrors({ email: 'Email already registered.' })
+      } else if (body.code === '23505' || (body.message || '').includes('username')) {
+        setErrors({ username: 'Username already taken.' })
+      } else {
+        setErrors({ form: 'Something went wrong. Try again.' })
+      }
     } finally {
       setLoading(false)
     }

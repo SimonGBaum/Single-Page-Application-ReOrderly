@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import PageWrapper from '../../components/PageWrapper/PageWrapper'
-import { getUserByUsername, saveSession } from '../../data/userStore'
 import { useAuth } from '../../context/AuthContext'
 import { useOrders } from '../../context/OrdersContext'
-import { getOrdersByUser } from '../../data/orderStore'
-import { hashPassword } from '../../utils/hashPassword'
+import * as authService from '../../services/authService'
+import * as userService from '../../services/userService'
+import * as orderService from '../../services/orderService'
 import './Login.css'
 
 export default function Login() {
@@ -26,23 +26,33 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const user = getUserByUsername(username.trim())
-      if (!user) {
+      const email = await authService.getEmailByUsername(username.trim())
+      if (!email) {
         setError('Hmm, that username or password isn\'t right.')
         setPassword('')
         return
       }
-      const ph = await hashPassword(password)
-      if (ph !== user.passwordHash) {
+
+      let authData
+      try {
+        authData = await authService.signIn({ email, password })
+      } catch {
         setError('Hmm, that username or password isn\'t right.')
         setPassword('')
         return
       }
-      saveSession(user.userId)
+
+      const profile = await userService.getProfile(authData.user.id)
+      const user    = { ...profile, email: authData.user.email }
+
       dispatch({ type: 'LOGIN', payload: user })
-      const orders = getOrdersByUser(user.userId)
+
+      const orders = await orderService.getOrders()
       ordersDispatch({ type: 'SET_ORDERS', payload: orders })
+
       navigate('/')
+    } catch {
+      setError('Something went wrong. Try again.')
     } finally {
       setLoading(false)
     }

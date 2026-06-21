@@ -1,5 +1,6 @@
 import { createContext, useContext, useReducer, useEffect } from 'react'
-import { getSession, getUserById, clearSession, saveSession } from '../data/userStore'
+import * as authService from '../services/authService'
+import * as userService from '../services/userService'
 
 const AuthContext = createContext(null)
 
@@ -10,7 +11,6 @@ function authReducer(state, action) {
     case 'LOGIN':
       return { user: action.payload, isLoading: false }
     case 'LOGOUT':
-      clearSession()
       return { user: null, isLoading: false }
     case 'UPDATE_USER':
       return { ...state, user: { ...state.user, ...action.payload } }
@@ -25,22 +25,36 @@ export function AuthProvider({ children }) {
   const [state, dispatch] = useReducer(authReducer, initialState)
 
   useEffect(() => {
-    const userId = getSession()
-    if (userId) {
-      const user = getUserById(userId)
-      if (user) {
-        saveSession(user.userId)
-        dispatch({ type: 'LOGIN', payload: user })
-      } else {
+    async function hydrate() {
+      const session = authService.getSession()
+      if (!session?.accessToken) {
+        dispatch({ type: 'HYDRATE_DONE' })
+        return
+      }
+      try {
+        const authUser = await authService.getAuthUser()
+        const profile  = await userService.getProfile(authUser.id)
+        if (profile) {
+          dispatch({ type: 'LOGIN', payload: { ...profile, email: authUser.email } })
+        } else {
+          authService.clearSession()
+          dispatch({ type: 'HYDRATE_DONE' })
+        }
+      } catch {
+        authService.clearSession()
         dispatch({ type: 'HYDRATE_DONE' })
       }
-    } else {
-      dispatch({ type: 'HYDRATE_DONE' })
     }
+    hydrate()
   }, [])
 
+  async function logout() {
+    await authService.signOut()
+    dispatch({ type: 'LOGOUT' })
+  }
+
   return (
-    <AuthContext.Provider value={{ ...state, dispatch }}>
+    <AuthContext.Provider value={{ ...state, dispatch, logout }}>
       {children}
     </AuthContext.Provider>
   )
